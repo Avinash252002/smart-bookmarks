@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 interface Bookmark {
@@ -20,35 +20,40 @@ export function BookmarkList({
 }) {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(initialBookmarks);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
+
+  const fetchBookmarks = useCallback(async () => {
+    const { data } = await supabase
+      .from("bookmarks")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (data) setBookmarks(data);
+  }, [supabase]);
 
   useEffect(() => {
+    // Fetch fresh data on mount (in case server-rendered data is stale)
+    fetchBookmarks();
+
     const channel = supabase
       .channel("bookmarks-realtime")
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "bookmarks",
-          filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          setBookmarks((prev) => [payload.new as Bookmark, ...prev]);
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "bookmarks",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          setBookmarks((prev) =>
-            prev.filter((b) => b.id !== payload.old.id)
-          );
+          if (payload.eventType === "INSERT" && payload.new.user_id === userId) {
+            setBookmarks((prev) => {
+              if (prev.some((b) => b.id === payload.new.id)) return prev;
+              return [payload.new as Bookmark, ...prev];
+            });
+          } else if (payload.eventType === "DELETE") {
+            setBookmarks((prev) =>
+              prev.filter((b) => b.id !== payload.old.id)
+            );
+          }
         }
       )
       .subscribe();
@@ -56,7 +61,7 @@ export function BookmarkList({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, userId]);
+  }, [supabase, userId, fetchBookmarks]);
 
   const handleDelete = async (id: string) => {
     setDeleting(id);

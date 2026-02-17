@@ -1,25 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export function AddBookmark({ userId }: { userId: string }) {
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
   const [loading, setLoading] = useState(false);
-  const supabase = createClient();
+  const [error, setError] = useState<string | null>(null);
+  const supabase = useMemo(() => createClient(), []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim() || !title.trim()) return;
 
     setLoading(true);
-    await supabase
+    setError(null);
+
+    const { error: insertError } = await supabase
       .from("bookmarks")
       .insert({ url: url.trim(), title: title.trim(), user_id: userId });
 
-    setUrl("");
-    setTitle("");
+    if (insertError) {
+      setError(insertError.message);
+    } else {
+      setUrl("");
+      setTitle("");
+    }
     setLoading(false);
   };
 
@@ -53,6 +60,9 @@ export function AddBookmark({ userId }: { userId: string }) {
           {loading ? "Adding..." : "Add"}
         </button>
       </div>
+      {error && (
+        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+      )}
     </form>
   );
 }

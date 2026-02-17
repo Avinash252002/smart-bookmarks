@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { BookmarkList } from "@/components/BookmarkList";
-import { AddBookmark } from "@/components/AddBookmark";
+import { Dashboard } from "@/components/Dashboard";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -13,10 +12,5 @@ export default async function DashboardPage() {
     .select("*")
     .order("created_at", { ascending: false });
 
-  return (
-    <div className="flex flex-col gap-8">
-      <AddBookmark userId={user!.id} />
-      <BookmarkList initialBookmarks={bookmarks ?? []} userId={user!.id} />
-    </div>
-  );
+  return <Dashboard initialBookmarks={bookmarks ?? []} userId={user!.id} />;
 }
